@@ -110,6 +110,36 @@ WinWindow class >> desktopWindowHandle [
 	^ self ffiCall: #( HWND GetDesktopWindow()) module: #user32
 ]
 
+{ #category : 'accessing - handles' }
+WinWindow class >> enumWindows [
+<script: 'self enumWindows inspect'>
+| callback oc block |
+oc := OrderedCollection new.
+block := [ :h :p | 
+	oc add: (WinWindow fromExternalHandle: h).
+	 ].
+callback := FFICallback signature: #(bool (void* hwnd, long param) ) block: [ :hwnd :param | 
+		"hwnd is an ExternalAddress" 
+		block value: hwnd value: param.
+		true  ].
+self enumWindows: callback param: 0.
+^oc
+]
+
+{ #category : 'accessing - handles' }
+WinWindow class >> enumWindows: function param: param [
+
+	^self ffiCall: #(int EnumWindows(FFICallback function, long param)) module: #user32 
+]
+
+{ #category : 'accessing - handles' }
+WinWindow class >> enumWindowsClassLike: aName [
+| list |
+list:= self enumWindows.
+list := list select:[ :e | '*',aName asLowercase,'*' match: e getClassName asLowercase ].
+^list
+]
+
 { #category : 'accessing - instances' }
 WinWindow class >> focusWindow [
 	"Return the window currently having the input focus"
@@ -208,6 +238,26 @@ WinWindow >> deviceContext [
 ]
 
 { #category : 'primitives' }
+WinWindow >> enumWindows: function param: param [
+
+	^self ffiCall: #(int EnumWindows(FFICallback function, long param)) module: #user32 
+]
+
+{ #category : 'accessing' }
+WinWindow >> getClassName [ 
+	| string sz |
+	string := (ByteArray new: 257).
+	sz := self getClassName: self getHandle buffer: string length: 256.
+	^string asString first: sz.
+]
+
+{ #category : 'primitives' }
+WinWindow >> getClassName: hwnd buffer: string length: length [
+
+	^self ffiCall: #(LONG GetClassNameA (HWND hwnd, char *string, LONG length)) module: #user32
+]
+
+{ #category : 'primitives' }
 WinWindow >> getWindow: wCmd [
 	"Retrieves the handle of a window that has the specified relationship (Z order or owner) to the specified window."
 
@@ -232,10 +282,41 @@ WinWindow >> getWindowRect: rect [
 	^self ffiCall: #(BOOL GetWindowRect(HWND self, RECT* rect)) module: #user32
 ]
 
+{ #category : 'accessing' }
+WinWindow >> getWindowStyle [
+
+	^ self getWindowLong: self getHandle index: GWL_STYLE
+]
+
+{ #category : 'private' }
+WinWindow >> getWindowText [
+	"self focusWindow windowText"
+	| str size |
+	size := self getWindowTextLength.
+	size = 0 ifTrue: [^''].
+	size := size +1.
+	str := ByteArray new: size.
+	self getWindowText: self buffer: str bufferSize: size.
+	str := str asString.
+	^str.
+]
+
 { #category : 'primitives' }
 WinWindow >> getWindowText: hWnd buffer: lpString bufferSize: nMaxCount [
 
 	^self ffiCall: #(int GetWindowTextA(HWND hWnd, char* lpString, int nMaxCount)) module: #user32
+]
+
+{ #category : 'primitives' }
+WinWindow >> getWindowTextLength [
+	self getHandle isNil ifTrue:[ ^0 ].
+	self getHandle = 0 ifTrue: [ ^0 ].
+	^self getWindowTextLength: self getHandle
+]
+
+{ #category : 'primitives' }
+WinWindow >> getWindowTextLength: hwnd [
+	^self ffiCall: #(LONG GetWindowTextLengthA (void* hwnd)) module: #user32
 ]
 
 { #category : 'comparing' }
@@ -292,6 +373,18 @@ WinWindow >> isZoomed [
 ]
 
 { #category : 'positioning' }
+WinWindow >> maximize [
+
+	self showWindow: self getHandle cmdShow: SW_MAXIMIZE
+]
+
+{ #category : 'positioning' }
+WinWindow >> minimize [
+
+	self showWindow: self getHandle cmdShow: SW_MINIMIZE
+]
+
+{ #category : 'positioning' }
 WinWindow >> moveTo: aPoint [
 
 	|rect|
@@ -320,6 +413,11 @@ WinWindow >> openIcon: hWnd [
 	^ self
 		ffiCall: #( BOOL OpenIcon #( HWND hWnd ) )
 		module: #user32
+]
+
+{ #category : 'printing' }
+WinWindow >> printOn: aStream [
+aStream nextPutAll: 'Window(',self  getClassName,') ''''',self getWindowText,')'.
 ]
 
 { #category : 'primitives' }
@@ -354,6 +452,13 @@ WinWindow >> show [
 
 	^ self ffiCall: #( BOOL ShowWindow ( HWND self, int SW_SHOW ))
 			  module: #user32
+]
+
+{ #category : 'primitives' }
+WinWindow >> showWindow: hwnd cmdShow: nCmdShow [ 
+
+	^self ffiCall: #(BOOL ShowWindow(HWND hwnd, int nCmdShow)) module: #user32.
+
 ]
 
 { #category : 'accessing' }
